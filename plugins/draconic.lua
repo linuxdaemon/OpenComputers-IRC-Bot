@@ -16,50 +16,76 @@ local function delta_ticks_to_ts(dt)
   local tph = tpm * 60
   local tpd = tph * 24
   local tpy = tpd * 365
-  
+
   local y = math.floor(dt / tpy)
   dt = math.fmod(dt, tpy)
-  
+
   local d = math.floor(dt / tpd)
   dt = math.fmod(dt, tpd)
-  
+
   local h = math.floor(dt / tph)
   dt = math.fmod(dt, tph)
-  
+
   local m = math.floor(dt / tpm)
   dt = math.fmod(dt, tpm)
-  
+
   local s = math.floor(dt / tps)
   dt = math.fmod(dt, tps)
-  
+
   local t = math.floor(dt)
 
   if y > 0 then
     ts = ts .. tostring(y) .. "y"
   end
+
   if d > 0 then
     ts = ts .. tostring(d) .. "d"
   end
+
   if h > 0 then
     ts = ts .. tostring(h) .. "h"
   end
+
   if m > 0 then
     ts = ts .. tostring(m) .. "m"
   end
+
   if s > 0 then
     ts = ts .. tostring(s) .. "s"
   end
+
   if t > 0 then
     ts = ts .. tostring(t) .. "t"
   end
+
   return ts
+end
+
+local suffixes = {
+  "",
+  "K",
+  "M",
+  "B",
+  "T",
+  "Quad",
+  "Quint"
+}
+
+local function formatNum(n, d)
+  local d = d or 4
+  local i = 1
+  while n > 1000 do
+    n = n / 1000
+    i = i + 1
+  end
+  return tostring(round(n, 3) .. suffixes[i])
 end
 
 local function check_pwr()
   local stored = draconic_pwr.getEnergyStored()
   local max_pwr = draconic_pwr.getMaxEnergyStored()
   local xfr = draconic_pwr.getTransferPerTick()
-  local msg = "Base Power: " .. tostring(stored) .. "/" .. tostring(max_pwr) .. " (" .. tostring(round((stored / max_pwr) * 100, 3)) .. "%) [Xfr: " .. tostring(xfr) .. "]"
+  local msg = "Base Power: " .. formatNum(stored) .. "/" .. formatNum(max_pwr) .. " (" .. formatNum(round((stored / max_pwr) * 100, 3)) .. "%) [Xfr: " .. formatNum(xfr) .. " rf/t]"
   if xfr > 0 then
     local ttf_t = (max_pwr - stored) / xfr
     msg = msg .. " [Time to Full: " .. delta_ticks_to_ts(ttf_t) .. "]"
