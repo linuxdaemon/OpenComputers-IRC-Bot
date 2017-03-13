@@ -234,7 +234,7 @@ function bot:run()
           local i = msg:find(">")
           msg = msg:sub(i + 2)
         end
-        if msg:sub(1,1) == config.cmd_prefix and #msg > 1 then
+        if msg:sub(1,1) == self.config.cmd_prefix and #msg > 1 then
           local cmd = msg:sub(2)
           self:handle_command(cmd, parsed)
         end

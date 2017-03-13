@@ -1,7 +1,8 @@
 local hook = dofile("hook.lua")
 
 local function stop(event)
-  event.bot.stop()
+  event.bot.running = false
+  event.bot:stop()
 end
 
 local hooks = {
