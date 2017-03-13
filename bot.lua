@@ -6,9 +6,9 @@ local shell = require("shell")
 
 local Permissions = dofile("permissions.lua")
 
-local workingDir = shell.getWorkingDirectory()
-local pluginDir = fs.concat(workingDir, "plugins")
-local logDir = fs.concat(workingDir, "logs")
+local working_dir = shell.getWorkingDirectory()
+local plugin_dir = fs.concat(working_dir, "plugins")
+local log_dir = fs.concat(working_dir, "logs")
 
 local Bot = {
   hooks = {
@@ -50,7 +50,7 @@ function Bot:log(line)
   if not res then
     io.stderr:write(err .. "\n" .. debug.traceback() .. "\n")
   end
-  local f, err = io.open(fs.concat(logDir, "bot.log"), "a")
+  local f, err = io.open(fs.concat(log_dir, "bot.log"), "a")
   if not f then
     io.stderr:write("Unable to open log file\n" .. err .. "\n" .. debug.traceback() .. "\n")
   else
