@@ -4,17 +4,17 @@ local serialization = require("serialization")
 local fs = require("filesystem")
 local shell = require("shell")
 
-local permissions = require("permissions")
+local permissions = dofile("permissions.lua")
 
 local plugin_dir = fs.concat(shell.getWorkingDirectory(), "plugins")
-
-local config = dofile("config.lua")
 
 local bot = {
   hooks = {
     commands = {}
   },
-  plugins = {}
+  plugins = {},
+  config = {},
+  running = false
 }
 
 local function rsplit(text, char)
@@ -25,13 +25,21 @@ local function rsplit(text, char)
   end
 end
 
+function bot:log(line)
+  local res, err = pcall(function() print(line) end)
+  if not res then
+    io.stderr:write(err .. "\n" .. debug.traceback())
+  end
+  local f, err = io.open()
+end
+
 function bot:plugin_unload(path)
   local file_name = fs.name(path)
   local title = rsplit(file_name, ".")[1]
   if not self.plugins[file_name:lower()] then -- Make sure the plugin is actually loaded
     return false
   end
-  
+
   for _,hook in ipairs(self.plugins[file_name:lower()].hooks) do
     if hook.type == "command" then
       if self.hooks.commands[hook.trigger] and self.hooks.commands[hook.trigger].parent == title then
@@ -74,7 +82,7 @@ function bot:plugin_load(path)
     hooks = plugin_hooks,
     title = title:lower()
   }
-  
+
   for _,hook in ipairs(plugin_hooks) do
     if hook.type == "command" then
       if self.hooks.commands[hook.trigger] == nil then
@@ -174,26 +182,45 @@ function bot:handle_command(cmd, parsed)
   end
 end
 
+function bot:connect()
+  if self.sock then self.sock:close() end
+  self.sock = internet.open(self.config.server.host, self.config.server.port)
+  self:send("NICK " .. self.nick)
+  self:send("USER " .. self.config.ident .. " 8 0 :" .. self.config.realname)
+end
+
 function bot:run()
+  self.running = true
+  self.config = dofile("config.lua")
   self.permissions_manager = permissions:new(bot)
-  self.permissions_manager:load(config.permissions)
-  self.nick = config.nick
-  self.sock = internet.open(config.server.host, config.server.port)
-  if self.sock then
-    self:load_all_plugins()
-    self:send("NICK " .. self.nick)
-    self:send("USER " .. config.ident .. " 8 0 :" .. config.realname)
-    while true do
+  self.permissions_manager:load(self.config.permissions)
+  self.nick = self.config.nick
+  self:load_all_plugins()
+  self:connect()
+  self.connectTries = 0
+  while self.running do
+    if not self.sock then
+      self:connect()
+      self.connectTries = self.connectTries + 1
+      if self.connectTries > 5 then
+        print("Unable to connect")
+        self:stop()
+      end
+    else
       local line = self.sock:read()
       if line == nil then
-        self.stop()
+        if self.running then
+          self:connect()
+        else
+          self:stop()
+        end
       end
       print(line)
       local parsed = parse(line)
       if parsed.command == "PING" then
         self:send("PONG " .. parsed.params[#parsed.params])
       elseif parsed.command == "001" then
-        self:send("JOIN :" .. table.concat(config.channels, ","))
+        self:send("JOIN :" .. table.concat(self.config.channels, ","))
       elseif parsed.command == "433" then
         self.nick = self.nick .. "_"
         self:send("NICK :" .. self.nick)
@@ -218,9 +245,9 @@ end
 
 function bot:stop()
   print("Stopping bot...")
-  bot:send("QUIT")
+  self:send("QUIT")
   os.sleep(.1)
-  bot.sock:close()
+  self.sock:close()
   os.sleep(.1)
   os.exit()
 end
