@@ -36,4 +36,4 @@ function Manager:user_has_perm(user, perm)
   return false
 end
 
-return manager
+return Manager
