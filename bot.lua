@@ -138,7 +138,7 @@ function Bot:notice(line, target)
   self:send("NOTICE " .. target .. " :" .. line)
 end
 
-function bot:parse(line)
+function Bot:parse(line)
   local pfx,cmd = "",""
   local words,params = {},{}
   for word in line:gmatch("[^ ]+") do
