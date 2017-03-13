@@ -1,40 +1,36 @@
-local serialization = require("serialization")
+local Manager = {}
 
-local manager = {}
+Manager.__index = Manager
 
-function manager:new(bot)
-  o = {
-    bot=bot
-  }
-  setmetatable(o, self)
-  self.__index = self
-  return o
-end
+setmetatable(Manager, {
+  __call = function(self, bot)
+    return setmetatable({bot=bot}, self)
+  end
+})
 
-function manager:load(perms)
+function Manager:load(perms)
   self.users = {}
   self.groups = {}
   for group,tbl in pairs(perms) do
     self.groups[group:lower()] = tbl
-    for _,user in ipairs(tbl.users) do
-      user = user:gsub("*", ".*")
-      if not self.users[user:lower()] then
-        self.users[user:lower()] = {}
+    for _,mask in ipairs(tbl.users) do
+      local mask = mask:gsub("*", ".*")
+      if not self.users[mask:lower()] then
+        self.users[mask:lower()] = {}
       end
       for _,perm in ipairs(tbl.perms) do
-        self.users[user:lower()][perm:lower()] = true
+        self.users[mask:lower()][perm:lower()] = true
       end
     end
   end
+  return true
 end
 
-function manager:user_has_perm(user, perm)
+function Manager:user_has_perm(user, perm)
   assert(self.users ~= nil)
-  for u,perms in pairs(self.users) do
-    if user:match(u) then
-      if perms[perm] then
-        return true
-      end
+  for mask,perms in pairs(self.users) do
+    if user:match(mask) and perms[perm] then
+      return true
     end
   end
   return false

@@ -4,18 +4,29 @@ local serialization = require("serialization")
 local fs = require("filesystem")
 local shell = require("shell")
 
-local permissions = dofile("permissions.lua")
+local Permissions = dofile("permissions.lua")
 
-local plugin_dir = fs.concat(shell.getWorkingDirectory(), "plugins")
+local workingDir = shell.getWorkingDirectory()
+local pluginDir = fs.concat(workingDir, "plugins")
+local logDir = fs.concat(workingDir, "logs")
 
-local bot = {
+local Bot = {
   hooks = {
     commands = {}
   },
   plugins = {},
   config = {},
-  running = false
+  running = false,
+  hasQuit = false,
 }
+
+Bot.__index = Bot
+
+setmetatable(Bot, {
+  __call = function(self)
+    return setmetatable({}, self)
+  end
+})
 
 local function rsplit(text, char)
   for i=#text,1,-1 do
@@ -25,15 +36,30 @@ local function rsplit(text, char)
   end
 end
 
-function bot:log(line)
-  local res, err = pcall(function() print(line) end)
-  if not res then
-    io.stderr:write(err .. "\n" .. debug.traceback())
-  end
-  local f, err = io.open()
+local function pfxToNuh(pfx)
+  local expos = pfx:find("!")
+  local atpos = pfx:find("@", expos+1)
+  local nick = pfx:sub(1,expos-1)
+  local ident = pfx:sub(expos+1, atpos-1)
+  local host = pfx:sub(atpos+1)
+  return nick, ident, host
 end
 
-function bot:plugin_unload(path)
+function Bot:log(line)
+  local res, err = pcall(function() print(line) end)
+  if not res then
+    io.stderr:write(err .. "\n" .. debug.traceback() .. "\n")
+  end
+  local f, err = io.open(fs.concat(logDir, "bot.log"), "a")
+  if not f then
+    io.stderr:write("Unable to open log file\n" .. err .. "\n" .. debug.traceback() .. "\n")
+  else
+    f:write(line .. "\n")
+    f:close()
+  end
+end
+
+function Bot:plugin_unload(path)
   local file_name = fs.name(path)
   local title = rsplit(file_name, ".")[1]
   if not self.plugins[file_name:lower()] then -- Make sure the plugin is actually loaded
@@ -50,7 +76,7 @@ function bot:plugin_unload(path)
   return true
 end
 
-function bot:load_all_plugins()
+function Bot:load_all_plugins()
   for file in fs.list(plugin_dir) do
     if file:sub(-4, -1) == ".lua" then
       self:plugin_load(fs.concat(plugin_dir, file))
@@ -58,22 +84,21 @@ function bot:load_all_plugins()
   end
 end
 
-function bot:plugin_load(path)
+function Bot:plugin_load(path)
   local file_path = fs.canonical(path)
   local file_name = fs.name(file_path)
   local title = rsplit(file_name, ".")[1]
   if not fs.exists(file_path) then
-    print("Path " .. file_path .. " is non-existant")
+    self:log("Path " .. file_path .. " is non-existant")
     return false
   end
   if self.plugins[file_name:lower()] then
     self:plugin_unload(file_path)
   end
-  print("Loading plugin '"..title.."'")
+  self:log("Loading plugin '"..title.."'")
   local f, err = loadfile(file_path)
   if not f then
     io.stderr:write("Plugin loading failed\n"..err.."\n"..debug.traceback().."\n")
-    os.sleep(5)
     return false
   end
 
@@ -94,26 +119,26 @@ function bot:plugin_load(path)
       end
     else
       error("Invalid hook type: " .. hook.type)
-      exit(1)
+      os.exit(1)
     end
   end
   return true
 end
 
-function bot:send(msg)
-  print(">> " .. msg)
+function Bot:send(msg)
+  self:log(">> " .. msg)
   self.sock:write(msg .. "\r\n")
 end
 
-function bot:msg(line, target)
+function Bot:msg(line, target)
   self:send("PRIVMSG " .. target .. " :" .. line)
 end
 
-function bot:notice(line, target)
+function Bot:notice(line, target)
   self:send("NOTICE " .. target .. " :" .. line)
 end
 
-local function parse(line)
+function bot:parse(line)
   local pfx,cmd = "",""
   local words,params = {},{}
   for word in line:gmatch("[^ ]+") do
@@ -134,15 +159,6 @@ local function parse(line)
   return {prefix=pfx, command=cmd, params=params}
 end
 
-local function pfxToNuh(pfx)
-  local expos = pfx:find("!")
-  local atpos = pfx:find("@", expos+1)
-  local nick = pfx:sub(1,expos-1)
-  local ident = pfx:sub(expos+1, atpos-1)
-  local host = pfx:sub(atpos+1)
-  return nick, ident, host
-end
-
 local function event(bot, nick, user, host, text, chan)
   return {
     bot = bot,
@@ -151,18 +167,17 @@ local function event(bot, nick, user, host, text, chan)
     host = host,
     text = text,
     chan = chan,
-    reply = function(msg) bot:msg(msg, chan) end
+    reply = function(msg) self:msg(msg, chan) end
   }
 end
 
-function bot:handle_command(cmd, parsed)
-  if self.hooks.commands[cmd:lower()] then
-    local hook = self.hooks.commands[cmd:lower()]
+function Bot:handle_command(cmd, parsed)
+  local hook = self.hooks.commands[cmd:lower()]
+  if hook then
     local n, u, h = pfxToNuh(parsed.prefix:sub(2))
     local mask = parsed.prefix:sub(2)
     if hook.perms then
       local has_perm = false
-      -- print(serialization.serialize(hook.perms))
       for _,perm in ipairs(hook.perms) do
         if self.permissions_manager:user_has_perm(mask, perm) then
           has_perm = true
@@ -182,41 +197,47 @@ function bot:handle_command(cmd, parsed)
   end
 end
 
-function bot:connect()
-  if self.sock then self.sock:close() end
+function Bot:connect()
+  if self.hasQuit then
+    return
+  end
+  if self.connected then
+    self:log("Reconnecting...")
+    self.sock:close()
+  else
+    self.connected = true
+    self:log("Connecting...")
+  end
   self.sock = internet.open(self.config.server.host, self.config.server.port)
   self:send("NICK " .. self.nick)
   self:send("USER " .. self.config.ident .. " 8 0 :" .. self.config.realname)
 end
 
-function bot:run()
+function Bot:run()
   self.running = true
   self.config = dofile("config.lua")
-  self.permissions_manager = permissions:new(bot)
+  self.permissions_manager = Permissions(self)
   self.permissions_manager:load(self.config.permissions)
   self.nick = self.config.nick
   self:load_all_plugins()
   self:connect()
   self.connectTries = 0
   while self.running do
-    if not self.sock then
-      self:connect()
-      self.connectTries = self.connectTries + 1
+    local line, err = self.sock:read()
+    if not line then
+      self:log("Read error: " .. tostring(err))
+      repeat
+        self:connect()
+        self.connectTries = self.connectTries + 1
+      until self.sock or self.connectTries > 5
       if self.connectTries > 5 then
-        print("Unable to connect")
+        log("Unable to connect")
         self:stop()
+        os.exit(1)
       end
     else
-      local line = self.sock:read()
-      if line == nil then
-        if self.running then
-          self:connect()
-        else
-          self:stop()
-        end
-      end
-      print(line)
-      local parsed = parse(line)
+      self:log(line)
+      local parsed = self:parse(line)
       if parsed.command == "PING" then
         self:send("PONG " .. parsed.params[#parsed.params])
       elseif parsed.command == "001" then
@@ -241,15 +262,38 @@ function bot:run()
       end
     end
   end
+  self:log("Shutting down...")
+  self:stop()
 end
 
-function bot:stop()
-  print("Stopping bot...")
-  self:send("QUIT")
-  os.sleep(.1)
-  self.sock:close()
-  os.sleep(.1)
-  os.exit()
+function Bot:close()
+  self:log("Stopping bot...")
+  if not self.hasQuit then
+    self:quit()
+  end
+  if self.connected then
+    self.sock:close()
+    self.connected = false
+  end
 end
 
-bot:run()
+function Bot:quit(reason)
+  if reason then
+    self:send("QUIT :" .. reason)
+  else
+    self:send("QUIT")
+  end
+  self.hasQuit = true
+end
+
+function Bot:reconnect()
+  self:log("Restarting")
+  self:connect()
+end
+
+local function main()
+  local bot = Bot()
+  bot:run()
+end
+
+main()
