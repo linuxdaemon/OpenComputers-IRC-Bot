@@ -23,10 +23,10 @@ local Bot = {
 Bot.__index = Bot
 
 setmetatable(Bot, {
-  __call = function(self)
-    return setmetatable({}, self)
-  end
-})
+    __call = function(self)
+      return setmetatable({}, self)
+    end
+  })
 
 local function rsplit(text, char)
   for i=#text,1,-1 do
@@ -53,6 +53,8 @@ function Bot:log(line)
   local f, err = io.open(fs.concat(log_dir, "bot.log"), "a")
   if not f then
     io.stderr:write("Unable to open log file\n" .. err .. "\n" .. debug.traceback() .. "\n")
+    self:close()
+    os.exit(1)
   else
     f:write(line .. "\n")
     f:close()
@@ -201,6 +203,7 @@ function Bot:connect()
   if self.hasQuit then
     return
   end
+  self.connectTries = (self.connectTries or 0) + 1
   if self.connected then
     self:log("Reconnecting...")
     self.sock:close()
@@ -213,57 +216,71 @@ function Bot:connect()
   self:send("USER " .. self.config.ident .. " 8 0 :" .. self.config.realname)
 end
 
+function Bot:handle_line(line)
+  self:log(line)
+
+  local parsed = self:parse(line)
+  if parsed.command == "PING" then
+    self:send("PONG " .. parsed.params[#parsed.params])
+  elseif parsed.command == "001" then
+    self:send("JOIN :" .. table.concat(self.config.channels, ","))
+  elseif parsed.command == "433" then
+    self.nick = self.nick .. "_"
+    self:send("NICK :" .. self.nick)
+  elseif parsed.command == "PRIVMSG" then
+    local chan = parsed.params[1]
+    local msg = parsed.params[#parsed.params]
+    if msg:sub(1,1) == ":" then
+      msg = msg:sub(2)
+    end
+    if parsed.prefix == ":DC2Relay!thumpSrv@totallynotrobots/linuxdaemon/bot/testbot" and msg:sub(1,1) == "<" then
+      local i = msg:find(">")
+      msg = msg:sub(i + 2)
+    end
+    if msg:sub(1,1) == self.config.cmd_prefix and #msg > 1 then
+      local cmd = msg:sub(2)
+      self:handle_command(cmd, parsed)
+    end
+  end
+end
+
+function Bot:read_line()
+  local line, err = self.sock:read()
+  if not line then
+    self:log("Read error: " .. tostring(err))
+    repeat
+      self:connect()
+    until self.sock or self.connectTries > 5
+    if self.connectTries > 5 then
+      log("Unable to connect")
+      self:stop()
+      os.exit(1)
+    end
+  else
+    self:handle_line(line)
+  end
+end
+
 function Bot:run()
+  if not fs.exists(log_dir) then
+    fs.makeDirectory(log_dir)
+  end
   self.running = true
   self.config = dofile("config.lua")
   self.permissions_manager = Permissions(self)
   self.permissions_manager:load(self.config.permissions)
   self.nick = self.config.nick
   self:load_all_plugins()
-  self:connect()
   self.connectTries = 0
   while self.running do
-    local line, err = self.sock:read()
-    if not line then
-      self:log("Read error: " .. tostring(err))
-      repeat
-        self:connect()
-        self.connectTries = self.connectTries + 1
-      until self.sock or self.connectTries > 5
-      if self.connectTries > 5 then
-        log("Unable to connect")
-        self:stop()
-        os.exit(1)
-      end
-    else
-      self:log(line)
-      local parsed = self:parse(line)
-      if parsed.command == "PING" then
-        self:send("PONG " .. parsed.params[#parsed.params])
-      elseif parsed.command == "001" then
-        self:send("JOIN :" .. table.concat(self.config.channels, ","))
-      elseif parsed.command == "433" then
-        self.nick = self.nick .. "_"
-        self:send("NICK :" .. self.nick)
-      elseif parsed.command == "PRIVMSG" then
-        local chan = parsed.params[1]
-        local msg = parsed.params[#parsed.params]
-        if msg:sub(1,1) == ":" then
-          msg = msg:sub(2)
-        end
-        if parsed.prefix == ":DC2Relay!thumpSrv@totallynotrobots/linuxdaemon/bot/testbot" and msg:sub(1,1) == "<" then
-          local i = msg:find(">")
-          msg = msg:sub(i + 2)
-        end
-        if msg:sub(1,1) == self.config.cmd_prefix and #msg > 1 then
-          local cmd = msg:sub(2)
-          self:handle_command(cmd, parsed)
-        end
+    if not self.hasQuit then
+      self:connect()
+      while self.connected do
+        self:read_line()
       end
     end
   end
-  self:log("Shutting down...")
-  self:stop()
+  self:close()
 end
 
 function Bot:close()
@@ -284,11 +301,6 @@ function Bot:quit(reason)
     self:send("QUIT")
   end
   self.hasQuit = true
-end
-
-function Bot:reconnect()
-  self:log("Restarting")
-  self:connect()
 end
 
 local function main()

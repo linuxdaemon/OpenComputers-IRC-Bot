@@ -15,7 +15,7 @@ local zwsp_char = string.char(table.unpack(zwsp_dec))
 local function players(ev)
   local player_list = debug.getPlayers()
   if #player_list == 0 then
-    return "No players online."  
+    return "No players online."
   else
     for k,v in ipairs(player_list) do
       player_list[k] = v:sub(1,1) .. zwsp_char .. v:sub(2)

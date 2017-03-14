@@ -71,7 +71,7 @@ local suffixes = {
   "Quint"
 }
 
-local function formatNum(n, d)
+local function format_num(n, d)
   local d = d or 4
   local i = 1
   while n > 1000 do
@@ -85,7 +85,8 @@ local function check_pwr()
   local stored = draconic_pwr.getEnergyStored()
   local max_pwr = draconic_pwr.getMaxEnergyStored()
   local xfr = draconic_pwr.getTransferPerTick()
-  local msg = "Base Power: " .. formatNum(stored) .. "/" .. formatNum(max_pwr) .. " (" .. formatNum(round((stored / max_pwr) * 100, 3)) .. "%) [Xfr: " .. formatNum(xfr) .. " rf/t]"
+  local fmt = "Power: %s/%s (%s%%) [Xfr: %s rf/t] [%s: %s]"
+  local msg = "Power: " .. format_num(stored) .. "/" .. format_num(max_pwr) .. " (" .. format_num(round((stored / max_pwr) * 100, 3)) .. "%) [Xfr: " .. format_num(xfr) .. " rf/t]"
   if xfr > 0 then
     local ttf_t = (max_pwr - stored) / xfr
     msg = msg .. " [Time to Full: " .. delta_ticks_to_ts(ttf_t) .. "]"
