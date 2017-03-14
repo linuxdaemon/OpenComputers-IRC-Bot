@@ -278,6 +278,8 @@ function Bot:run()
       while self.connected do
         self:read_line()
       end
+    else
+      break
     end
   end
   self:close()
