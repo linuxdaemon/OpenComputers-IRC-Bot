@@ -13,6 +13,11 @@ local log_dir = fs.concat(working_dir, "logs")
 local Bot = {
   running = false,
   hasQuit = false,
+  hooks = {
+    commands = {}
+  },
+  plugins = {},
+  config = {},
 }
 
 Bot.__index = Bot
