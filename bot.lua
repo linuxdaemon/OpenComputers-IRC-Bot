@@ -4,6 +4,8 @@ local serialization = require("serialization")
 local fs = require("filesystem")
 local shell = require("shell")
 local pkg = require("package")
+local hook = require("hook")
+local class = require("class")
 
 local Permissions = dofile("permissions.lua")
 
@@ -13,23 +15,17 @@ local log_dir = fs.concat(working_dir, "logs")
 
 pkg.path = pkg.path .. ";./lib/?.lua;./lib/?/init.lua"
 
-local Bot = {
-  running = false,
-  hasQuit = false,
-  hooks = {
+local Bot = class()
+
+function Bot:_init()
+  self.running = false
+  self.hasQuit = false
+  self.hooks = {
     commands = {}
-  },
-  plugins = {},
-  config = {},
-}
-
-Bot.__index = Bot
-
-setmetatable(Bot, {
-    __call = function(self)
-      return setmetatable({}, self)
-    end
-  })
+  }
+  self.plugins = {}
+  self.config = {}
+end
 
 local function rsplit(text, char)
   for i=#text,1,-1 do
@@ -113,17 +109,17 @@ function Bot:plugin_load(path)
     title = title:lower()
   }
 
-  for _,hook in ipairs(plugin_hooks) do
-    if hook.type == "command" then
-      if self.hooks.commands[hook.trigger] == nil then
-        self.hooks.commands[hook.trigger] = hook
-        self.hooks.commands[hook.trigger].parent = title
+  for _,hk in ipairs(plugin_hooks) do
+    if hk.type == hook.type.COMMAND then
+      if self.hooks.commands[hk.trigger] == nil then
+        self.hooks.commands[hk.trigger] = hk
+        self.hooks.commands[hk.trigger].parent = title
       else
-        io.stderr:write("Plugin loading failed, plugin '"..title.."' attempted to register hook '"..hook.trigger.."' which was already registered by '"..self.hooks.commands[hook.trigger].parent.."'\n")
+        io.stderr:write("Plugin loading failed, plugin '"..title.."' attempted to register hook '"..hk.trigger.."' which was already registered by '"..self.hooks.commands[hk.trigger].parent.."'\n")
         return false
       end
     else
-      error("Invalid hook type: " .. hook.type)
+      error("Invalid hook type: " .. hk.type)
       os.exit(1)
     end
   end
@@ -177,13 +173,13 @@ local function event(bot, nick, user, host, text, chan)
 end
 
 function Bot:handle_command(cmd, parsed)
-  local hook = self.hooks.commands[cmd:lower()]
-  if hook then
+  local hk = self.hooks.commands[cmd:lower()]
+  if hk then
     local n, u, h = pfxToNuh(parsed.prefix:sub(2))
     local mask = parsed.prefix:sub(2)
-    if hook.perms then
+    if hk.perms then
       local has_perm = false
-      for _,perm in ipairs(hook.perms) do
+      for _,perm in ipairs(hk.perms) do
         if self.permissions_manager:user_has_perm(mask, perm) then
           has_perm = true
           break
