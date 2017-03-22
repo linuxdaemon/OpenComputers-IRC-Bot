@@ -11,11 +11,6 @@ local plugin_dir = fs.concat(working_dir, "plugins")
 local log_dir = fs.concat(working_dir, "logs")
 
 local Bot = {
-  hooks = {
-    commands = {}
-  },
-  plugins = {},
-  config = {},
   running = false,
   hasQuit = false,
 }
@@ -252,7 +247,7 @@ function Bot:read_line()
       self:connect()
     until self.sock or self.connectTries > 5
     if self.connectTries > 5 then
-      log("Unable to connect")
+      self:log("Unable to connect")
       self:stop()
       os.exit(1)
     end
@@ -265,6 +260,7 @@ function Bot:run()
   if not fs.exists(log_dir) then
     fs.makeDirectory(log_dir)
   end
+
   self.running = true
   self.config = dofile("config.lua")
   self.permissions_manager = Permissions(self)
@@ -272,6 +268,7 @@ function Bot:run()
   self.nick = self.config.nick
   self:load_all_plugins()
   self.connectTries = 0
+
   while self.running do
     if not self.hasQuit then
       self:connect()

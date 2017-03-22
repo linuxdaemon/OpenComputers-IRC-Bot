@@ -1,16 +1,15 @@
-local plugin = {}
+local class = require("class")
 
-function plugin:new(file, name)
-  o = {
-    hooks={},
-    file=file,
-    name=name
-  }
-  setmetatable(o, self)
-  self.__index = self
-  return o
+local PluginManager = class()
+
+function PluginManager:_init(bot)
+  self.bot = bot
+  self.plugins = {}
+  self.hooks = {}
 end
 
+function PluginManager:load_plugin(path)
+end
 
-
-return plugin
+function PluginManager:unload_plugin(path)
+end

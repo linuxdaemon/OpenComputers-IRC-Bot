@@ -82,11 +82,12 @@ local function format_num(n, d)
 end
 
 local function check_pwr()
-  local stored = draconic_pwr.getEnergyStored()
-  local max_pwr = draconic_pwr.getMaxEnergyStored()
-  local xfr = draconic_pwr.getTransferPerTick()
+  local stored = format_num(draconic_pwr.getEnergyStored())
+  local max_pwr = format_num(draconic_pwr.getMaxEnergyStored())
+  local xfr = format_num(draconic_pwr.getTransferPerTick())
+  local full = round((stored / max_pwr) * 100, 3)
   local fmt = "Power: %s/%s (%s%%) [Xfr: %s rf/t]"
-  local msg = string.format(fmt, format_num(stored), format_num(max_pwr), format_num(round((stored / max_pwr) * 100, 3)), format_num(xfr))
+  local msg = string.format(fmt, stored, max_pwr, full, xfr)
   if xfr > 0 then
     local ttf_t = (max_pwr - stored) / xfr
     msg = msg .. " [Time to Full: " .. delta_ticks_to_ts(ttf_t) .. "]"
