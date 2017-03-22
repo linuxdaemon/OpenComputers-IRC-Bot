@@ -111,12 +111,14 @@ function Bot:plugin_load(path)
 
   for _,hk in ipairs(plugin_hooks) do
     if hk.type == hook.type.COMMAND then
-      if self.hooks.commands[hk.trigger] == nil then
-        self.hooks.commands[hk.trigger] = hk
-        self.hooks.commands[hk.trigger].parent = title
-      else
-        io.stderr:write("Plugin loading failed, plugin '"..title.."' attempted to register hook '"..hk.trigger.."' which was already registered by '"..self.hooks.commands[hk.trigger].parent.."'\n")
-        return false
+      for alias in hk.aliases do
+        if self.hooks.commands[alias] == nil then
+          self.hooks.commands[alias] = hk
+          self.hooks.commands[alias].parent = title
+        else
+          io.stderr:write("Plugin loading failed, plugin '"..title.."' attempted to register hook '"..alias.."' which was already registered by '"..self.hooks.commands[alias].parent.."'\n")
+          return false
+        end
       end
     else
       error("Invalid hook type: " .. hk.type)
