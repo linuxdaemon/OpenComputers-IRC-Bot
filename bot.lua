@@ -111,7 +111,7 @@ function Bot:plugin_load(path)
 
   for _,hk in ipairs(plugin_hooks) do
     if hk.type == hook.type.COMMAND then
-      for alias in hk.aliases do
+      for _,alias in ipairs(hk.aliases) do
         if self.hooks.commands[alias] == nil then
           self.hooks.commands[alias] = hk
           self.hooks.commands[alias].parent = title
