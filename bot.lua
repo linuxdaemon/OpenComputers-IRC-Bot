@@ -3,12 +3,15 @@ local internet = require("internet")
 local serialization = require("serialization")
 local fs = require("filesystem")
 local shell = require("shell")
+local pkg = require("package")
 
 local Permissions = dofile("permissions.lua")
 
 local working_dir = shell.getWorkingDirectory()
 local plugin_dir = fs.concat(working_dir, "plugins")
 local log_dir = fs.concat(working_dir, "logs")
+
+pkg.path = pkg.path .. ";./lib/?.lua;./lib/?/init.lua"
 
 local Bot = {
   running = false,
