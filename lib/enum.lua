@@ -8,3 +8,5 @@ function enum.unique(...)
   end
   return t
 end
+
+return enum

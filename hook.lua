@@ -2,7 +2,7 @@ local enum = require("enum")
 
 local hook = {}
 
-hook.type = enum(
+hook.type = enum.unique(
   "COMMAND",
   "RAW"
 )
