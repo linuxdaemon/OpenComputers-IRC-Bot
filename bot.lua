@@ -254,7 +254,7 @@ function Bot:read_line()
     until self.sock or self.connectTries > 5
     if self.connectTries > 5 then
       self:log("Unable to connect")
-      self:stop()
+      self:close()
       os.exit(1)
     end
   else
